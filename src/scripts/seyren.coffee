@@ -6,16 +6,49 @@
 #   None
 #
 # Configuration:
-#   None
+#   HUBOT_SEYREN_URL
 #
 # Commands:
-#   None
+#   hubot seyren list - list all enabled Seyren checks and their state
+#   hubot seyren broken - list all enabled Seyren checks which are not in an OK state
 #
 # Author:
 #   neilprosser
 
 QS = require "querystring"
 module.exports = (robot) ->
+
+  displayChecks = (msg, res, body) ->
+    status = res.statusCode
+    if status is 200
+      data = JSON.parse(body)
+      checks = data.values
+      if checks.length == 0
+        msg.send "I've got nothing to show you"
+      else
+        response = ""
+        for check in checks
+          state = switch check.state
+            when "OK" then "OK     "
+            when "WARN" then "WARN   "
+            when "ERROR" then "ERROR  "
+            else "UNKNOWN"
+          response += "#{state} | #{check.name}\n"
+        msg.send response
+    else
+      msg.send "Something broke. I got a response code of #{status}"
+
+  robot.respond /seyren list/i, (msg) ->
+    url = process.env.HUBOT_SEYREN_URL
+    msg.http("#{url}/api/checks?enabled=true")
+      .get() (err, res, body) ->
+        displayChecks(msg, res, body)
+
+  robot.respond /seyren broken/i, (msg) ->
+    url = process.env.HUBOT_SEYREN_URL
+    msg.http("#{url}/api/checks?enabled=true&state=ERROR&state=WARN")
+      .get() (err, res, body) ->
+        displayChecks(msg, res, body)
 
   robot.router.post "/hubot/seyren/alert", (req, res) ->
     seyrenUrl = req.body.seyrenUrl
